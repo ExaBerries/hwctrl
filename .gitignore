@@ -1,0 +1,46 @@
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# meson
+meson-info
+meson-logs
+meson-private
+meson-uninstalled
+
+# ninja
+.ninja_deps
+.ninja_log
+*.ninja
+
+# Compilation Database
+compile_commands.json
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app

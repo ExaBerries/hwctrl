@@ -29,7 +29,7 @@ rfc values are unsigned short
 
 byte offset | value
 ------------|-------
-0           | voltage
+0           | bit 7 - 0 or 1 volts <br> bits 0-6 millivolts <br> voltage in mV = volts * 1000 + millivolts
 3           | memory clock mtb
 8           | tCL mtb
 9           | tRCD mtb

@@ -8,6 +8,9 @@ meson-logs
 meson-private
 meson-uninstalled
 
+# meson subprojects
+subprojects/lyra
+
 # ninja
 .ninja_deps
 .ninja_log

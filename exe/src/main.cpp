@@ -1,4 +1,5 @@
 #include <source/spd.hpp>
+#include <source/cpuinfo.hpp>
 #include <util/file.hpp>
 #if defined(__GNUG__)
 #pragma GCC diagnostic push
@@ -23,15 +24,16 @@
 namespace hwctrl::exe {
 	template <typename T>
 	concept HwctrlCommand = std::is_default_constructible_v<T> && requires(T t) {
-		T::name;
+		T::NAME;
 		t.setup_cli(std::declval<lyra::cli_parser&>());
 		t.execute();
 	};
 
-	template <HwctrlCommand command>
+	template <HwctrlCommand ... commands>
 	struct command_match {
-		std::optional<command> command_optional;
+		std::optional<std::variant<commands...>> command_optional{};
 
+		// used for compare in fold expression
 		[[nodiscard]] constexpr command_match operator|(command_match cmd_match) const noexcept {
 			if (cmd_match.command_optional != std::nullopt) {
 				return cmd_match;
@@ -41,9 +43,10 @@ namespace hwctrl::exe {
 		}
 	};
 
-	template <HwctrlCommand command>
-	[[nodiscard]] constexpr command_match<command> compare_name(std::string_view command_string) noexcept  {
-		if (command::name == command_string) {
+	// instantiates a command_match if command::name == command_string
+	template <HwctrlCommand command, HwctrlCommand ... commands>
+	[[nodiscard]] constexpr command_match<commands...> compare_name(std::string_view command_string) noexcept  {
+		if (command::NAME == command_string) {
 			return {{command()}};
 		} else {
 			return {};
@@ -52,16 +55,12 @@ namespace hwctrl::exe {
 
 	template <HwctrlCommand ... commands>
 	[[nodiscard]] constexpr std::optional<std::variant<commands...>> match_command(const std::string& command_string) noexcept {
-		auto result = (compare_name<commands>(command_string) | ...).command_optional;
-		if (result != std::nullopt) {
-			return {result.value()};
-		}
-		return {};
+		return (compare_name<commands, commands...>(command_string) | ...).command_optional;
 	}
 
 	namespace cmd {
 		struct spd {
-			static constexpr auto name = "spd";
+			static constexpr auto NAME = "spd";
 			std::filesystem::path path{};
 			bool serial = false;
 
@@ -72,8 +71,8 @@ namespace hwctrl::exe {
 
 			void execute() noexcept {
 				auto file_result = util::file::read_binary_file(path);
-				if (const auto* err = std::get_if<hwctrl_error>(&file_result)) {
-					std::cerr << err->message << std::endl;
+				if (const auto* err_ptr = std::get_if<hwctrl_error>(&file_result)) {
+					std::cerr << err_ptr->message << std::endl;
 					exit(EXIT_FAILURE);
 				}
 				auto& file_contents = std::get<std::vector<char>>(file_result);
@@ -86,6 +85,51 @@ namespace hwctrl::exe {
 				
 				std::cout << "===spd info===" << std::endl;
 				std::cout << spd_string(std::get<source::spd>(spd_parsed), serial) << std::endl;
+			}
+		};
+
+		struct debug {
+			static constexpr auto NAME = "debug";
+			bool serial = false;
+
+			void setup_cli([[maybe_unused]] lyra::cli_parser& parser) noexcept {
+				parser |= lyra::opt(serial)["--serial"].optional();
+			}
+
+			void execute() {
+				{
+					// cpuinfo
+					auto read_result = source::read_cpuinfo();
+					if (const auto* err_ptr = std::get_if<hwctrl_error>(&read_result)) {
+						std::cerr << err_ptr->message << std::endl;
+						exit(EXIT_FAILURE);
+					}
+					auto result = source::parse_cpuinfo(std::get<std::string>(read_result));
+					if (const auto* err_ptr = std::get_if<hwctrl_error>(&result)) {
+						std::cerr << err_ptr->message << std::endl;
+						exit(EXIT_FAILURE);
+					}
+					std::cout << "===cpuinfo===" << std::endl;
+					std::cout << source::cpuinfo_string(std::get<source::cpuinfo>(result)) << std::endl;
+				}
+				{
+					// spd
+					/*auto file_result = util::file::read_binary_file(path);
+					if (const auto* err_ptr = std::get_if<hwctrl_error>(&file_result)) {
+						std::cerr << err_ptr->message << std::endl;
+						exit(EXIT_FAILURE);
+					}
+					auto& file_contents = std::get<std::vector<char>>(file_result);
+
+					auto spd_parsed = source::parse_spd(reinterpret_cast<unsigned char*>(file_contents.data()), static_cast<uint32_t>(file_contents.size()));
+					if (const auto* err = std::get_if<hwctrl_error>(&spd_parsed)) {
+						std::cerr << err->message << std::endl;
+						exit(EXIT_FAILURE);
+					}
+
+					std::cout << "===spd info===" << std::endl;
+					std::cout << spd_string(std::get<source::spd>(spd_parsed), serial) << std::endl;*/
+				}
 			}
 		};
 	} // namespace cmd
@@ -122,7 +166,7 @@ int main(int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	auto cmd_opt = match_command<cmd::spd>(command_string);
+	auto cmd_opt = match_command<cmd::spd, cmd::debug>(command_string);
 
 	if (cmd_opt != std::nullopt) {
 		std::visit([&cli](auto&& arg) noexcept {

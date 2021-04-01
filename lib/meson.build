@@ -4,6 +4,7 @@ lib_include = include_directories('include')
 lib = library('hwctrl',
 	[
 		'src/source/spd.cpp',
+		'src/source/cpuinfo.cpp',
 		'src/util/file.cpp'
 	],
 	include_directories: [
